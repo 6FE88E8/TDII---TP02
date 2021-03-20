@@ -1,0 +1,204 @@
+;*****************************************************************
+;       Aprendiendo Assembler - 8085
+;       Actividad: Entender las interrupciones
+;       FERRER, Ezequiel
+;*****************************************************************
+; Requiere (simulacion):
+;   - Teclado en puerto 10h
+
+;*****************************************************************
+;       Definición de Etiquetas
+;*****************************************************************
+.define
+	BootAddr        0000h
+	StackAddr       FFFFh
+	DataROM         4100h
+    DataRAM         5100h
+
+	AddrIntRST1		0008h     ; direcciones de intr
+	AddrIntRST2		0010h
+	AddrIntRST3		0018h
+	AddrIntRST4		0020h
+	AddrIntTRAP		0024h
+	AddrIntRST5		0028h
+	AddrIntRST55	002Ch
+	AddrIntRST6		0030h
+	AddrIntRST65	0034h
+	AddrIntRST7		0038h
+	AddrIntRST75	003Ch
+    MSE         08h    ; establecimiento de intr
+    M75         04h
+    M65         02h
+    M55         01h
+
+    Teclado     10h    ; Puerto teclado
+
+    CantD       10      ; elementos del vector
+
+;*****************************************************************
+;       Datos en ROM
+;*****************************************************************
+.data       DataROM
+    ;DatoNum:    dB	4h, 8h, 5h, 2h, 0h, 3h, 2h, 9h, 3h, 7h
+    DatoNum:    dB  0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h
+    ;DatoNum:    dB	5Ch, D8h, 35h, 2Fh, 90h, 38h, A7h, B9h, 33h, A7h
+
+;*****************************************************************
+;       Datos en RAM
+;*****************************************************************
+.data       DataRAM
+    DatoAux:    dB  0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h, 0h
+    CantPar:    dB  0h
+    CritOrden:  dB  0h
+    
+    DatoTecl:   dB  0h
+    FlgNewData:	dB	0h   ; 1= new    3= new idem
+
+;*****************************************************************
+;       Arranque del 8085
+;*****************************************************************
+.org        BootAddr
+    JMP     Boot
+
+;*****************************************************************
+;       Vector de INTR
+;*****************************************************************
+.org        AddrIntRST1
+    JMP IntRST1
+.org        AddrIntRST2
+    JMP	IntRST2
+.org    	AddrIntRST3
+    JMP	IntRST3
+.org    	AddrIntRST4
+    JMP	IntRST4
+.org    	AddrIntTRAP
+    JMP	IntTRAP
+.org    	AddrIntRST5
+    JMP	IntRST5
+.org    	AddrIntRST55
+    JMP	IntRST55
+.org    	AddrIntRST6
+    JMP	IntRST6
+.org        AddrIntRST65
+    JMP	IntRST65
+.org    	AddrIntRST7
+    JMP	IntRST7
+.org    	AddrIntRST75
+    JMP	IntRST75
+
+;*****************************************************************
+;       Definiciones de INTR
+;*****************************************************************
+IntRST1:
+    RET
+IntRST2:
+    RET
+IntRST3:
+    RET
+IntRST4:
+    RET
+IntTRAP:
+    RET
+IntRST5:
+    RET
+IntRST55:
+    RET
+IntRST6:
+    RET
+
+IntRST65: ; FlgNewData (i) newdata, NEW != LAST lo guardo en RAM
+    PUSH	PSW
+
+        LDA FlgNewData      ; |> A<- FlgNewData && (0000 0001)
+        ANI	01h             ; |
+        JNZ	MismaTecl       ; A!=0 ? => salto
+
+        IN	Teclado         ; |> en RAM<- tecla
+        STA	DatoTecl        ; |
+
+        MVI	A, 01h          ; |> FlgNewData<- (0000 0001)
+        STA FlgNewData      ; |
+    MismaTecl:
+    
+    POP	PSW
+	EI
+	RET
+
+IntRST7:
+    RET
+IntRST75:
+    RET
+
+;*****************************************************************
+;       PROGRAMA PRINCIPAL
+;*****************************************************************
+Boot:
+	LXI     SP, StackAddr
+    
+    MVI	    A, MSE|M75|M55 ; 0000 1101 para las intr  
+    SIM                    ; Inicializo las inter
+	EI
+
+    LXI     H, DatoNum     ; posiciono array datos
+    MVI     B, CantD       ; contador para cargar datos
+Main:
+	LDA     FlgNewData     ; |> A<- FlgNewData && (0000 0001)
+    ANI	    01h            ; |       L> (NEW?:01h OTHER?:00h)
+	JZ      Main           ; A=0 ? => main
+
+    CALL    ProcesaTecl    ; A!=0 => salto
+    DCR     B              ; un numero menos
+    JNZ     Main           ; hasta que se llene el array
+
+	HLT
+
+ProcesaTecl:
+	;PUSH	H              ; guardo pa no cagarla
+	;PUSH	PSW
+
+	LDA	    DatoTecl       ; A<- tecla
+	
+	CPI	    '0'            ; comparo con 0
+	JZ      valid          ; es cero? sigo comparando
+    CPI 	'1'            ; comparo con 1
+	JZ    	valid          ; es uno?.....
+	CPI    	'2'
+	JZ    	valid
+	CPI    	'3'
+	JZ    	valid
+	CPI    	'4'
+	JZ    	valid
+	CPI    	'5'
+	JZ    	valid
+	CPI     '6'
+	JZ    	valid
+	CPI    	'7'
+	JZ    	valid
+	CPI    	'8'
+	JZ    	valid
+	CPI    	'9'
+	JZ    	valid          ; ...no es valido?
+
+	JMP	    NoDato         ; se tira
+valid:
+	CALL	GuardarDato    ; al array
+NoDato:
+	LDA     FlgNewData     ; |> A<- FlgNewData && (1111 1110)
+    ANI	    FEh            ; |         (*vale XXXX XXX0?)<-'
+    
+	STA	    FlgNewData     ; Flags<- A     *normal/ 0000 0000
+
+	;POP	    PSW        ; salgo aca afuera no paso nada
+	;POP	    H
+	RET
+    HLT
+
+;*****************************************************************
+;       FUNCION GuardarDato
+;*****************************************************************
+GuardarDato:
+    LDA	    DatoTecl
+    MOV     M, A
+    INX     H
+    RET
+    HLT
